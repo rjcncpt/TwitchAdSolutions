@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         TwitchAdSolutions (vaft)
-// @namespace    https://github.com/pixeltris/TwitchAdSolutions
-// @version      37.0.1
+// @namespace    https://github.com/rjcncpt/TwitchAdSolutions
+// @version      37.0.2
 // @description  Multiple solutions for blocking Twitch ads (vaft)
-// @updateURL    https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js
-// @downloadURL  https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js
+// @updateURL    https://github.com/rjcncpt/TwitchAdSolutions/raw/refs/heads/master/vaft/vaft.user.js
+// @downloadURL  https://github.com/rjcncpt/TwitchAdSolutions/raw/refs/heads/master/vaft/vaft.user.js
 // @author       https://github.com/cleanlock/VideoAdBlockForTwitch#credits
 // @match        *://*.twitch.tv/*
 // @run-at       document-start
@@ -13,10 +13,9 @@
 // ==/UserScript==
 (function() {
     'use strict';
-    const ourTwitchAdSolutionsVersion = 26;// Used to prevent conflicts with outdated versions of the scripts
+    const ourTwitchAdSolutionsVersion = 27;// Used to prevent conflicts with outdated versions of the scripts
     if (typeof window.twitchAdSolutionsVersion !== 'undefined' && window.twitchAdSolutionsVersion >= ourTwitchAdSolutionsVersion) {
         console.log("skipping vaft as there's another script active. ourVersion:" + ourTwitchAdSolutionsVersion + " activeVersion:" + window.twitchAdSolutionsVersion);
-        window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
@@ -34,6 +33,8 @@
         scope.SkipPlayerReloadOnHevc = false;// If true this will skip player reload on streams which have 2k/4k quality (if you enable this and you use the 2k/4k quality setting you'll get error #4000 / #3000 / spinning wheel on chrome based browsers)
         scope.AlwaysReloadPlayerOnAd = false;// Always pause/play when entering/leaving ads
         scope.ReloadPlayerAfterAd = true;// After the ad finishes do a player reload instead of pause/play
+        scope.FetchTimeout = 5000;// Maximum time (in milliseconds) for a backup stream request
+        scope.BackupRetryDelay = 10000;// Minimum time (in milliseconds) before requesting a new access token for a backup which had ads or failed
         scope.PlayerReloadMinimalRequestsTime = 1500;
         scope.PlayerReloadMinimalRequestsPlayerIndex = 2;//autoplay
         scope.HasTriggeredPlayerReload = false;
@@ -151,13 +152,13 @@
                     ${getWasmWorkerJs.toString()}
                     ${getServerTimeFromM3u8.toString()}
                     ${replaceServerTimeInM3u8.toString()}
-                    const workerString = getWasmWorkerJs('${twitchBlobUrl.replaceAll("'", "%27")}');
+                    const workerString = getWasmWorkerJs(${JSON.stringify(String(twitchBlobUrl))});
                     declareOptions(self);
-                    GQLDeviceID = ${GQLDeviceID ? "'" + GQLDeviceID + "'" : null};
-                    AuthorizationHeader = ${AuthorizationHeader ? "'" + AuthorizationHeader + "'" : undefined};
-                    ClientIntegrityHeader = ${ClientIntegrityHeader ? "'" + ClientIntegrityHeader + "'" : null};
-                    ClientVersion = ${ClientVersion ? "'" + ClientVersion + "'" : null};
-                    ClientSession = ${ClientSession ? "'" + ClientSession + "'" : null};
+                    GQLDeviceID = ${JSON.stringify(GQLDeviceID ?? null)};
+                    AuthorizationHeader = ${JSON.stringify(AuthorizationHeader)};
+                    ClientIntegrityHeader = ${JSON.stringify(ClientIntegrityHeader ?? null)};
+                    ClientVersion = ${JSON.stringify(ClientVersion ?? null)};
+                    ClientSession = ${JSON.stringify(ClientSession ?? null)};
                     self.addEventListener('message', function(e) {
                         if (e.data.key == 'UpdateClientVersion') {
                             ClientVersion = e.data.value;
@@ -271,6 +272,9 @@
         req.open('GET', twitchBlobUrl, false);
         req.overrideMimeType("text/javascript");
         req.send();
+        if (req.status !== 200) {
+            throw new Error('Could not load the Twitch player worker: HTTP ' + req.status);
+        }
         return req.responseText;
     }
     function forgetStreamInfo(previous) {
@@ -321,7 +325,7 @@
     async function isVariantAvailable(realFetch, url) {
         if (!url) return false;
         try {
-            return (await realFetch(url)).status === 200;
+            return (await realFetch(url, {signal: AbortSignal.timeout(FetchTimeout)})).status === 200;
         } catch {
             return false;
         }
@@ -370,8 +374,8 @@
                     const original = await response.clone().text();
                     try {
                         return playlistResponse(response, original, await processM3U8(url, original, realFetch));
-                    } catch {
-                        console.error('Could not process Twitch media playlist');
+                    } catch (error) {
+                        console.error('Could not process Twitch media playlist: ' + error.name);
                         return response;
                     }
                 } else if (isMasterPlaylist) {
@@ -410,6 +414,7 @@
                                 Urls: [],// xxx.m3u8 -> { Resolution: "284x160", FrameRate: 30.0 }
                                 ResolutionList: [],
                                 BackupEncodingsM3U8Cache: [],
+                                BackupRequestedAt: Object.create(null),// playerType -> time of the last finished access token attempt
                                 ActiveBackupPlayerType: null,
                                 IsMidroll: false,
                                 IsStrippingAdSegments: false,
@@ -475,8 +480,8 @@
                         const currentBase = new URL(baseUrl);
                         const changedLocation = cachedBase.origin !== currentBase.origin || cachedBase.pathname !== currentBase.pathname;
                         return playlistResponse(response, original, changedLocation ? absolutePlaylist(updated, cachedBase.href) : updated);
-                    } catch {
-                        console.error('Could not process Twitch master playlist');
+                    } catch (error) {
+                        console.error('Could not process Twitch master playlist: ' + error.name);
                         return response;
                     }
                 }
@@ -548,7 +553,7 @@
         let closestResolutionDifference = Infinity;
         for (let i = 0; i < encodingsLines.length - 1; i++) {
             if (encodingsLines[i].startsWith('#EXT-X-STREAM-INF') && encodingsLines[i + 1].includes('.m3u8')) {
-                const attributes = parseAttributes(encodingsLines[i]);
+                const attributes = parseAttributes(encodingsLines[i].slice(encodingsLines[i].indexOf(':') + 1));
                 const resolution = attributes['RESOLUTION'];
                 const frameRate = attributes['FRAME-RATE'];
                 if (resolution) {
@@ -641,6 +646,9 @@
                     let isFreshM3u8 = false;
                     let encodingsM3u8 = streamInfo.BackupEncodingsM3U8Cache[playerType];
                     if (!encodingsM3u8) {
+                        if (Date.now() - (streamInfo.BackupRequestedAt[playerType] ?? 0) < BackupRetryDelay) {
+                            break;
+                        }
                         isFreshM3u8 = true;
                         try {
                             const accessTokenResponse = await getAccessToken(streamInfo.ChannelName, realPlayerType);
@@ -649,17 +657,28 @@
                                 const urlInfo = new URL('https://usher.ttvnw.net/api/' + (V2API ? 'v2/' : '') + 'channel/hls/' + streamInfo.ChannelName + '.m3u8' + streamInfo.UsherParams);
                                 urlInfo.searchParams.set('sig', accessToken.data.streamPlaybackAccessToken.signature);
                                 urlInfo.searchParams.set('token', accessToken.data.streamPlaybackAccessToken.value);
-                                const encodingsM3u8Response = await realFetch(urlInfo.href);
+                                const encodingsM3u8Response = await realFetch(urlInfo.href, {signal: AbortSignal.timeout(FetchTimeout)});
                                 if (encodingsM3u8Response.status === 200) {
                                     encodingsM3u8 = streamInfo.BackupEncodingsM3U8Cache[playerType] = absolutePlaylist(await encodingsM3u8Response.text(), encodingsM3u8Response.url || urlInfo.href);
+                                } else {
+                                    console.warn(`Backup playlist failed (${playerType}): HTTP ${encodingsM3u8Response.status}`);
                                 }
+                            } else {
+                                console.warn(`Backup access token failed (${playerType}): HTTP ${accessTokenResponse.status}`);
                             }
-                        } catch (err) {}
+                        } catch (err) {
+                            // Only the error name: messages can contain URLs with the access token
+                            console.warn(`Backup request failed (${playerType}): ${err.name}`);
+                        }
+                        streamInfo.BackupRequestedAt[playerType] = Date.now();
                     }
                     if (encodingsM3u8) {
                         try {
                             const streamM3u8Url = getStreamUrlForResolution(encodingsM3u8, currentResolution);
-                            const streamM3u8Response = streamM3u8Url ? await realFetch(streamM3u8Url) : null;
+                            const streamM3u8Response = streamM3u8Url ? await realFetch(streamM3u8Url, {signal: AbortSignal.timeout(FetchTimeout)}) : null;
+                            if (streamM3u8Response && streamM3u8Response.status != 200) {
+                                console.warn(`Backup stream failed (${playerType}): HTTP ${streamM3u8Response.status}`);
+                            }
                             if (streamM3u8Response?.status == 200) {
                                 const m3u8Text = absolutePlaylist(await streamM3u8Response.text(), streamM3u8Response.url || streamM3u8Url);
                                 if (m3u8Text) {
@@ -681,7 +700,13 @@
                                     }
                                 }
                             }
-                        } catch (err) {}
+                        } catch (err) {
+                            console.warn(`Backup stream failed (${playerType}): ${err.name}`);
+                        }
+                    }
+                    // Keep a recent playlist so that not every poll requests a new access token
+                    if (Date.now() - streamInfo.BackupRequestedAt[playerType] < BackupRetryDelay) {
+                        break;
                     }
                     streamInfo.BackupEncodingsM3U8Cache[playerType] = null;
                     if (isFreshM3u8) {
@@ -709,6 +734,7 @@
             console.log('Finished blocking ads');
             streamInfo.IsShowingAd = false;
             streamInfo.RequestedAds.clear();
+            streamInfo.BackupRequestedAt = Object.create(null);
             streamInfo.IsStrippingAdSegments = false;
             streamInfo.NumStrippedAdSegments = 0;
             streamInfo.ActiveBackupPlayerType = null;
@@ -820,6 +846,15 @@
         isLive: true
     };
     function monitorPlayerBuffering() {
+        try {
+            checkPlayerBuffering();
+        } catch (err) {
+            console.error('error when monitoring player for buffering: ' + err);
+            playerForMonitoringBuffering = null;
+        }
+        setTimeout(monitorPlayerBuffering, PlayerBufferingDelay);
+    }
+    function checkPlayerBuffering() {
         if (playerForMonitoringBuffering) {
             try {
                 const player = playerForMonitoringBuffering.player;
@@ -896,7 +931,6 @@
             });
         }
         playerBufferState.isLive = isLive;
-        setTimeout(monitorPlayerBuffering, PlayerBufferingDelay);
     }
     function updateAdblockBanner(data) {
         const playerRootDiv = document.querySelector('.video-player');
@@ -1042,6 +1076,9 @@
     }
     async function handleWorkerFetchRequest(fetchRequest) {
         try {
+            if (new URL(fetchRequest.url).origin !== 'https://gql.twitch.tv') {
+                throw new Error('Blocked worker request outside gql.twitch.tv');
+            }
             const response = await window.realFetch(fetchRequest.url, fetchRequest.options);
             const responseBody = await response.text();
             const responseObject = {
@@ -1204,9 +1241,16 @@
             const realSetItem = localStorage.setItem;
             localStorage.setItem = function(key, value) {
                 if (cachedValues.has(key)) {
-                    cachedValues.set(key, value);
+                    cachedValues.set(key, String(value));
                 }
                 realSetItem.apply(this, arguments);
+            };
+            const realRemoveItem = localStorage.removeItem;
+            localStorage.removeItem = function(key) {
+                if (cachedValues.has(key)) {
+                    cachedValues.set(key, null);
+                }
+                realRemoveItem.apply(this, arguments);
             };
             const realGetItem = localStorage.getItem;
             localStorage.getItem = function(key) {
