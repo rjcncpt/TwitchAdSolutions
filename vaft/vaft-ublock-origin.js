@@ -48,8 +48,11 @@ twitch-videoad.js text/javascript
         scope.IsAdStrippingEnabled = true;
         scope.AdSegmentCache = new Map();
         scope.AllSegmentsAreAdSegments = false;
+        scope.AdBannerHideDelay = 5000;// How long (in milliseconds) the "Blocking ads" message stays visible before it hides itself until the next ad break (0 = keep it visible for the whole ad break)
     }
     let isActivelyStrippingAds = false;
+    let adBannerHideTimer = null;
+    let isAdBannerDismissed = false;
     let localStorageHookFailed = false;
     const twitchWorkers = new Set();
     const disposeWorkerUrls = new WeakMap();
@@ -937,7 +940,19 @@ twitch-videoad.js text/javascript
             if (adBlockDiv != null) {
                 isActivelyStrippingAds = data.isStrippingAdSegments;
                 adBlockDiv.P.textContent = 'Blocking' + (data.isMidroll ? ' midroll' : '') + ' ads' + (data.isStrippingAdSegments ? ' (stripping)' : '');// + (data.numStrippedAdSegments > 0 ? ` (${data.numStrippedAdSegments})` : '');
-                adBlockDiv.style.display = data.hasAds && playerBufferState.isLive ? 'block' : 'none';
+                const showBanner = data.hasAds && playerBufferState.isLive;
+                if (!showBanner) {
+                    clearTimeout(adBannerHideTimer);
+                    adBannerHideTimer = null;
+                    isAdBannerDismissed = false;
+                } else if (AdBannerHideDelay > 0 && !isAdBannerDismissed && adBannerHideTimer === null) {
+                    adBannerHideTimer = setTimeout(() => {
+                        adBannerHideTimer = null;
+                        isAdBannerDismissed = true;
+                        adBlockDiv.style.display = 'none';
+                    }, AdBannerHideDelay);
+                }
+                adBlockDiv.style.display = showBanner && !isAdBannerDismissed ? 'block' : 'none';
             }
         }
     }
