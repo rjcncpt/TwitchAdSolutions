@@ -148,8 +148,9 @@ globalThis.postMessage = message => {
 globalThis.XMLHttpRequest = class {
     open() {}
     overrideMimeType() {}
-    send() { this.responseText = ''; }
+    send() { this.status = 200; this.responseText = ''; }
 };
+globalThis.AbortSignal = { timeout: () => undefined };
 globalThis.Worker = class Worker {
     constructor(url, options) {
         this.url = url;

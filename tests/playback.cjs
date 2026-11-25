@@ -36,6 +36,48 @@ async function playback(source, path) {
 
 const cases = [
     {
+        name: 'guards versions, headers, worker requests and backup retries',
+        only: 'vaft',
+        async run(source, path) {
+            const newer = loadScript('', 'empty.js');
+            newer.run('window.twitchAdSolutionsVersion = 1000;');
+            newer.run(source, path);
+            assert.equal(newer.run('window.twitchAdSolutionsVersion'), 1000);
+
+            const page = loadScript(source, path);
+            const authorization = 'fixture\'quoted\\value';
+            fixture(page, gqlUrl, 'ok');
+            await page.run(`fetch(${json(gqlUrl)}, {headers: {Authorization: ${json(authorization)}}})`);
+            const quoted = loadWorker(page);
+            assert.equal(quoted.run('AuthorizationHeader'), authorization);
+
+            page.run(`
+                const relay = new Worker('blob:https://www.twitch.tv/relay');
+                relay.emit('message', {key: 'FetchRequest', value: {id: '1', url: 'https://other.invalid/x'}});
+            `);
+            await new Promise(resolve => setImmediate(resolve));
+            assert.match(page.run('relay.messages[0].value.error'), /Blocked/);
+
+            const { worker } = await playback(source, path);
+            assert.equal(worker.run(`getStreamUrlForResolution(
+                '#EXT-X-STREAM-INF:RESOLUTION=640x360\\nhttps://cdn.invalid/first.m3u8',
+                {Resolution: '640x360'})`), 'https://cdn.invalid/first.m3u8');
+            worker.run(`
+                BackupPlayerTypes = ['fixture'];
+                PlayerReloadMinimalRequestsTime = 0;
+                graphQLResponse = {status: 503, body: '{}'};
+            `);
+            fixture(worker, mediaUrl, adMedia);
+            const tokenRequests = "workerMessages.filter(m => m.key === 'FetchRequest').length";
+            await worker.run(`fetch(${json(mediaUrl)})`);
+            await worker.run(`fetch(${json(mediaUrl)})`);
+            assert.equal(worker.evaluate(tokenRequests), 1, 'a recent failure is not retried');
+            worker.run('advance(10000)');
+            await worker.run(`fetch(${json(mediaUrl)})`);
+            assert.equal(worker.evaluate(tokenRequests), 2, 'the retry happens after the delay');
+        },
+    },
+    {
         name: 'returns or rejects every playlist fetch',
         legacy: true,
         async run(source, path) {
