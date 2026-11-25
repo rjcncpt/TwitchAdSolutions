@@ -34,14 +34,14 @@
 
 - https://greasyfork.org/en/scripts/371186-twitch-mute-ads-and-optionally-hide-them/code
   - Mute ads and optionally hide them (tweak the settings at the top of the script).
-- `vaft` - [userscript](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js)
+- `vaft` - [userscript](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft.user.js)
   - Attempts to get a clean stream as fast as it can.
   - If it fails to get a clean stream it removes ad segments (no playback until ad-free stream is found).
-- `video-swap-new` - [userscript](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/video-swap-new/video-swap-new.user.js)
+- `video-swap-new` - [userscript](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/video-swap-new/video-swap-new.user.js)
   - Attempts to get a clean stream (low resolution).
   - If it fails to get a clean stream it removes ad segments (no playback until ad-free stream is found).
   - Not recommended, `vaft` is a better script.
-- `strip` (legacy, unmaintained) - [userscript](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/strip/strip.user.js)
+- `strip` (legacy, unmaintained) - [userscript](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/strip/strip.user.js)
   - Strips ad segments (no playback until ad-free stream is found).
   - Not recommended, `vaft` is a better script.
 

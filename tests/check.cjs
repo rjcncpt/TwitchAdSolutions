@@ -33,7 +33,7 @@ function bodyOf(source, ublock) {
 }
 
 function checkInstallUrls(scripts, ref) {
-    const raw = 'https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/';
+    const raw = 'https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/';
     const knownUrls = scripts.map(({ path }) => raw + path);
     const documentation = ['README.md', 'full-list.md', 'issues.md'].map(path => {
         const doc = load(path, ref);

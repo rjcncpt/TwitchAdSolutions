@@ -14,7 +14,7 @@ Twitch stream  ──►  ad break?  ──►  ad-free copy of the stream  ─�
 
 ## Install
 
-**[Install VAFT](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js)**
+**[Install VAFT](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft.user.js)**
 in a userscript manager such as [Violentmonkey](https://violentmonkey.github.io/) or
 [Tampermonkey](https://www.tampermonkey.net/), then reload Twitch. Your manager keeps it up to date.
 
@@ -51,7 +51,7 @@ your manager will offer to replace it.
 1. **Install a userscript manager.** [Violentmonkey](https://violentmonkey.github.io/) or
    [Tampermonkey](https://www.tampermonkey.net/) both work.
 2. **Install the script.** Open the
-   [VAFT link](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js)
+   [VAFT link](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft.user.js)
    and press **Install**.
 3. **Turn off other Twitch ad blockers,** including any older copy of this script.
 4. **Reload Twitch** and start watching.
@@ -61,7 +61,7 @@ your manager will offer to replace it.
 1. Open the uBlock Origin dashboard. In **My filters**, add `twitch.tv##+js(twitch-videoad)` and
    press **Apply changes**.
 2. In **Settings**, tick **I am an advanced user**, then click the gear beside it. Add the
-   [VAFT resource URL](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft-ublock-origin.js)
+   [VAFT resource URL](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft-ublock-origin.js)
    to `userResourcesLocation`, separated by a space from any URL already there.
 3. Restart the browser and reload Twitch.
 
@@ -72,8 +72,8 @@ To remove it, delete the filter and the URL you added. Leave any other URLs in p
 
 | Script | When to use it | Install |
 | --- | --- | --- |
-| **VAFT** | Recommended for everyone. | [Userscript](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft.user.js) · [uBlock Origin](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/vaft/vaft-ublock-origin.js) |
-| video-swap-new | Try it only if VAFT doesn't work well for you. | [Userscript](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/video-swap-new/video-swap-new.user.js) · [uBlock Origin](https://raw.githubusercontent.com/ahizechi/TwitchAdSolutions/master/video-swap-new/video-swap-new-ublock-origin.js) |
+| **VAFT** | Recommended for everyone. | [Userscript](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft.user.js) · [uBlock Origin](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/vaft/vaft-ublock-origin.js) |
+| video-swap-new | Try it only if VAFT doesn't work well for you. | [Userscript](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/video-swap-new/video-swap-new.user.js) · [uBlock Origin](https://raw.githubusercontent.com/rjcncpt/TwitchAdSolutions/master/video-swap-new/video-swap-new-ublock-origin.js) |
 
 Install one, not both.
 
